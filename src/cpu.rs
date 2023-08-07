@@ -195,10 +195,24 @@ impl Cpu {
         self.pc
     }
 
+    pub fn set_pc(&mut self, val: u16) {
+        self.pc = val;
+    }
+
     #[inline]
     #[must_use]
     pub const fn sp(&self) -> u8 {
         self.sp
+    }
+
+    pub fn set_sp(&mut self, val: u8) {
+        self.sp = val;
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn acc(&self) -> u8 {
+        self.acc
     }
 
     #[inline]
@@ -207,10 +221,18 @@ impl Cpu {
         self.acc
     }
 
+    pub fn set_acc(&mut self, val: u8) {
+        self.acc = val;
+    }
+
     #[inline]
     #[must_use]
     pub const fn x(&self) -> u8 {
         self.x
+    }
+
+    pub fn set_x(&mut self, val: u8) {
+        self.x = val;
     }
 
     #[inline]
@@ -219,9 +241,17 @@ impl Cpu {
         self.y
     }
 
+    pub fn set_y(&mut self, val: u8) {
+        self.y = val;
+    }
+
     #[inline]
     pub const fn status(&self) -> Status {
         self.status
+    }
+
+    pub fn set_status(&mut self, val: Status) {
+        self.status = val;
     }
 
     #[inline]
@@ -421,14 +451,16 @@ impl Cpu {
             self.nmi = false;
             self.push(status);
             self.status.set(Status::I, true);
+            self.set_status(self.status);
 
-            self.pc = self.read_u16(Self::NMI_VECTOR);
+            self.set_pc(self.read_u16(Self::NMI_VECTOR));
             log::trace!("NMI: {}", self.cycle);
         } else {
             self.push(status);
             self.status.set(Status::I, true);
+            self.set_status(self.status);
 
-            self.pc = self.read_u16(Self::IRQ_VECTOR);
+            self.set_pc(self.read_u16(Self::IRQ_VECTOR));
             log::trace!("IRQ: {}", self.cycle);
         }
     }
@@ -573,6 +605,7 @@ impl Cpu {
     fn set_zn_status(&mut self, val: u8) {
         self.status.set(Status::Z, val == 0x00);
         self.status.set(Status::N, val & 0x80 == 0x80);
+        self.set_status(self.status);
     }
 
     #[inline]
@@ -676,7 +709,7 @@ impl Cpu {
     #[inline]
     fn write_fetched(&mut self, val: u8) {
         match self.instr.addr_mode() {
-            IMP | ACC => self.acc = val,
+            IMP | ACC => self.set_acc(val),
             IMM => (), // noop
             _ => self.write(self.abs_addr, val, Access::Write),
         }
@@ -687,7 +720,7 @@ impl Cpu {
     #[inline]
     fn read_instr(&mut self) -> u8 {
         let val = self.read(self.pc, Access::Read);
-        self.pc = self.pc.wrapping_add(1);
+        self.set_pc(self.pc.wrapping_add(1));
         val
     }
 
@@ -1083,16 +1116,18 @@ impl Reset for Cpu {
         match kind {
             Kind::Soft => {
                 self.status.set(Status::I, true);
+                self.set_status(self.status); // we just call this again to log it in the trace
+
                 // Reset pushes to the stack similar to IRQ, but since the read bit is set, nothing is
                 // written except the SP being decremented
-                self.sp = self.sp.wrapping_sub(0x03);
+                self.set_sp(self.sp.wrapping_sub(0x03));
             }
             Kind::Hard => {
-                self.acc = 0x00;
-                self.x = 0x00;
-                self.y = 0x00;
-                self.status = Self::POWER_ON_STATUS;
-                self.sp = Self::POWER_ON_SP;
+                self.set_a(0x00);
+                self.set_x(0x00);
+                self.set_y(0x00);
+                self.set_status(Self::POWER_ON_STATUS);
+                self.set_sp(Self::POWER_ON_SP);
             }
         }
 
@@ -1112,7 +1147,7 @@ impl Reset for Cpu {
         // Read directly from bus so as to not clock other components during reset
         let lo = self.bus.read(Self::RESET_VECTOR, Access::Read);
         let hi = self.bus.read(Self::RESET_VECTOR + 1, Access::Read);
-        self.pc = u16::from_le_bytes([lo, hi]);
+        self.set_pc(u16::from_le_bytes([lo, hi]));
 
         for _ in 0..7 {
             self.start_cycle(Cycle::Read);

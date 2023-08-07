@@ -59,6 +59,7 @@ pub mod mem;
 pub mod nes;
 pub mod ppu;
 pub mod video;
+pub mod trace;
 
 pub type NesError = anyhow::Error;
 pub type NesResult<T> = anyhow::Result<T, NesError>;

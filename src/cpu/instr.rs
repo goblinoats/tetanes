@@ -125,7 +125,7 @@ impl Cpu {
     #[inline]
     pub(super) fn imm(&mut self) {
         self.abs_addr = self.pc;
-        self.pc = self.pc.wrapping_add(1);
+        self.set_pc(self.pc.wrapping_add(1));
     }
 
     /// Zero Page
@@ -621,22 +621,25 @@ impl Cpu {
     #[inline]
     pub(super) fn lda(&mut self) {
         self.fetch_data();
-        self.acc = self.fetched_data;
+        self.set_acc(self.fetched_data);
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// LDX: Load X with M
     #[inline]
     pub(super) fn ldx(&mut self) {
         self.fetch_data();
-        self.x = self.fetched_data;
+        self.set_x(self.fetched_data);
         self.set_zn_status(self.x);
+        self.set_status(self.status);
     }
     /// LDY: Load Y with M
     #[inline]
     pub(super) fn ldy(&mut self) {
         self.fetch_data();
-        self.y = self.fetched_data;
+        self.set_y(self.fetched_data);
         self.set_zn_status(self.y);
+        self.set_status(self.status);
     }
     /// STA: Store A into M
     #[inline]
@@ -656,37 +659,42 @@ impl Cpu {
     /// TAX: Transfer A to X
     #[inline]
     pub(super) fn tax(&mut self) {
-        self.x = self.acc;
+        self.set_x(self.acc);
         self.set_zn_status(self.x);
+        self.set_status(self.status);
     }
     /// TAY: Transfer A to Y
     #[inline]
     pub(super) fn tay(&mut self) {
-        self.y = self.acc;
+        self.set_y(self.acc);
         self.set_zn_status(self.y);
+        self.set_status(self.status);
     }
     /// TSX: Transfer Stack Pointer to X
     #[inline]
     pub(super) fn tsx(&mut self) {
-        self.x = self.sp;
+        self.set_x(self.sp);
         self.set_zn_status(self.x);
+        self.set_status(self.status);
     }
     /// TXA: Transfer X to A
     #[inline]
     pub(super) fn txa(&mut self) {
-        self.acc = self.x;
+        self.set_acc(self.x);
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// TXS: Transfer X to Stack Pointer
     #[inline]
     pub(super) fn txs(&mut self) {
-        self.sp = self.x;
+        self.set_sp(self.x);
     }
     /// TYA: Transfer Y to A
     #[inline]
     pub(super) fn tya(&mut self) {
-        self.acc = self.y;
+        self.set_acc(self.y);
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
 
     /// Arithmetic opcodes
@@ -698,13 +706,14 @@ impl Cpu {
         let a = self.acc;
         let (x1, o1) = self.fetched_data.overflowing_add(a);
         let (x2, o2) = x1.overflowing_add(self.status_bit(Status::C));
-        self.acc = x2;
+        self.set_acc(x2);
         self.status.set(Status::C, o1 | o2);
         self.status.set(
             Status::V,
             (a ^ self.fetched_data) & 0x80 == 0 && (a ^ self.acc) & 0x80 != 0,
         );
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// SBC: Subtract M from A with Carry
     #[inline]
@@ -713,13 +722,14 @@ impl Cpu {
         let a = self.acc;
         let (x1, o1) = a.overflowing_sub(self.fetched_data);
         let (x2, o2) = x1.overflowing_sub(1 - self.status_bit(Status::C));
-        self.acc = x2;
+        self.set_acc(x2);
         self.status.set(Status::C, !(o1 | o2));
         self.status.set(
             Status::V,
             (a ^ self.fetched_data) & 0x80 != 0 && (a ^ self.acc) & 0x80 != 0,
         );
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// DEC: Decrement M by One
     #[inline]
@@ -729,18 +739,21 @@ impl Cpu {
         let val = self.fetched_data.wrapping_sub(1);
         self.write_fetched(val);
         self.set_zn_status(val);
+        self.set_status(self.status);
     }
     /// DEX: Decrement X by One
     #[inline]
     pub(super) fn dex(&mut self) {
-        self.x = self.x.wrapping_sub(1);
+        self.set_x(self.x.wrapping_sub(1));
         self.set_zn_status(self.x);
+        self.set_status(self.status);
     }
     /// DEY: Decrement Y by One
     #[inline]
     pub(super) fn dey(&mut self) {
-        self.y = self.y.wrapping_sub(1);
+        self.set_y(self.y.wrapping_sub(1));
         self.set_zn_status(self.y);
+        self.set_status(self.status);
     }
     /// INC: Increment M by One
     #[inline]
@@ -749,19 +762,22 @@ impl Cpu {
         self.write_fetched(self.fetched_data); // dummy write
         let val = self.fetched_data.wrapping_add(1);
         self.set_zn_status(val);
+        self.set_status(self.status);
         self.write_fetched(val);
     }
     /// INX: Increment X by One
     #[inline]
     pub(super) fn inx(&mut self) {
-        self.x = self.x.wrapping_add(1);
+        self.set_x(self.x.wrapping_add(1));
         self.set_zn_status(self.x);
+        self.set_status(self.status);
     }
     /// INY: Increment Y by One
     #[inline]
     pub(super) fn iny(&mut self) {
-        self.y = self.y.wrapping_add(1);
+        self.set_y(self.y.wrapping_add(1));
         self.set_zn_status(self.y);
+        self.set_status(self.status);
     }
 
     /// Bitwise opcodes
@@ -772,6 +788,7 @@ impl Cpu {
         self.fetch_data();
         self.acc &= self.fetched_data;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// ASL: Shift Left One Bit (M or A)
     #[inline]
@@ -781,6 +798,7 @@ impl Cpu {
         self.status.set(Status::C, (self.fetched_data >> 7) & 1 > 0);
         let val = self.fetched_data.wrapping_shl(1);
         self.set_zn_status(val);
+        self.set_status(self.status);
         self.write_fetched(val); // Cycle 7
     }
     /// BIT: Test Bits in M with A (Affects N, V, and Z)
@@ -791,6 +809,7 @@ impl Cpu {
         self.status.set(Status::Z, val == 0);
         self.status.set(Status::N, self.fetched_data & (1 << 7) > 0);
         self.status.set(Status::V, self.fetched_data & (1 << 6) > 0);
+        self.set_status(self.status);
     }
     /// EOR: "Exclusive-Or" M with A
     #[inline]
@@ -798,6 +817,7 @@ impl Cpu {
         self.fetch_data();
         self.acc ^= self.fetched_data;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// LSR: Shift Right One Bit (M or A)
     #[inline]
@@ -807,6 +827,7 @@ impl Cpu {
         self.status.set(Status::C, self.fetched_data & 1 > 0);
         let val = self.fetched_data.wrapping_shr(1);
         self.set_zn_status(val);
+        self.set_status(self.status);
         self.write_fetched(val); // Cycle 7
     }
     /// ORA: "OR" M with A
@@ -815,6 +836,7 @@ impl Cpu {
         self.fetch_data();
         self.acc |= self.fetched_data;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// ROL: Rotate One Bit Left (M or A)
     #[inline]
@@ -825,6 +847,7 @@ impl Cpu {
         self.status.set(Status::C, (self.fetched_data >> 7) & 1 > 0);
         let val = (self.fetched_data << 1) | old_c;
         self.set_zn_status(val);
+        self.set_status(self.status);
         self.write_fetched(val);
     }
     /// ROR: Rotate One Bit Right (M or A)
@@ -840,6 +863,7 @@ impl Cpu {
         }
         self.status.set(Status::C, self.fetched_data & 1 > 0);
         self.set_zn_status(ret);
+        self.set_status(self.status);
         self.write_fetched(ret);
     }
 
@@ -864,7 +888,7 @@ impl Cpu {
         if Self::pages_differ(self.abs_addr, self.pc) {
             self.read(self.pc, Access::Read); // Dummy read
         }
-        self.pc = self.abs_addr;
+        self.set_pc(self.abs_addr);
     }
     /// BCC: Branch on Carry Clear
     #[inline]
@@ -934,7 +958,7 @@ impl Cpu {
     //                   byte to PCH
     #[inline]
     pub(super) fn jmp(&mut self) {
-        self.pc = self.abs_addr;
+        self.set_pc(self.abs_addr);
     }
     /// JSR: Jump to Location Save Return addr
     //  #  address R/W description
@@ -950,7 +974,7 @@ impl Cpu {
     pub(super) fn jsr(&mut self) {
         let _ = self.read(Self::SP_BASE | u16::from(self.sp), Access::Read); // Cycle 3
         self.push_u16(self.pc.wrapping_sub(1));
-        self.pc = self.abs_addr;
+        self.set_pc(self.abs_addr);
     }
     /// RTI: Return from Interrupt
     //  #  address R/W description
@@ -967,7 +991,8 @@ impl Cpu {
         self.status = Status::from_bits_truncate(self.pop()); // Cycle 4
         self.status &= !Status::U;
         self.status &= !Status::B;
-        self.pc = self.pop_u16(); // Cycles 5 & 6
+        self.set_status(self.status);
+        self.set_pc(self.pop_u16()); // Cycles 5 & 6
     }
     /// RTS: Return from Subroutine
     //  #  address R/W description
@@ -981,7 +1006,7 @@ impl Cpu {
     #[inline]
     pub(super) fn rts(&mut self) {
         let _ = self.read(Self::SP_BASE | u16::from(self.sp), Access::Read); // Cycle 3
-        self.pc = self.pop_u16().wrapping_add(1); // Cycles 4 & 5
+        self.set_pc(self.pop_u16().wrapping_add(1)); // Cycles 4 & 5
         let _ = self.read(self.pc, Access::Read); // Cycle 6
     }
 
@@ -991,36 +1016,43 @@ impl Cpu {
     #[inline]
     pub(super) fn clc(&mut self) {
         self.status.set(Status::C, false);
+        self.set_status(self.status);
     }
     /// SEC: Set Carry Flag
     #[inline]
     pub(super) fn sec(&mut self) {
         self.status.set(Status::C, true);
+        self.set_status(self.status);
     }
     /// CLD: Clear Decimal Mode
     #[inline]
     pub(super) fn cld(&mut self) {
         self.status.set(Status::D, false);
+        self.set_status(self.status);
     }
     /// SED: Set Decimal Mode
     #[inline]
     pub(super) fn sed(&mut self) {
         self.status.set(Status::D, true);
+        self.set_status(self.status);
     }
     /// CLI: Clear Interrupt Disable Bit
     #[inline]
     pub(super) fn cli(&mut self) {
         self.status.set(Status::I, false);
+        self.set_status(self.status);
     }
     /// SEI: Set Interrupt Disable Status
     #[inline]
     pub(super) fn sei(&mut self) {
         self.status.set(Status::I, true);
+        self.set_status(self.status);
     }
     /// CLV: Clear Overflow Flag
     #[inline]
     pub(super) fn clv(&mut self) {
         self.status.set(Status::V, false);
+        self.set_status(self.status);
     }
 
     /// Compare opcodes
@@ -1030,6 +1062,7 @@ impl Cpu {
     pub(super) fn compare(&mut self, a: u8, b: u8) {
         let result = a.wrapping_sub(b);
         self.set_zn_status(result);
+        self.set_status(self.status);
         self.status.set(Status::C, a >= b);
     }
     /// CMP: Compare M and A
@@ -1075,6 +1108,7 @@ impl Cpu {
     pub(super) fn plp(&mut self) {
         let _ = self.read(Self::SP_BASE | u16::from(self.sp), Access::Read); // Cycle 3
         self.status = Status::from_bits_truncate(self.pop());
+        self.set_status(self.status);
     }
     /// PHA: Push A on Stack
     //  #  address R/W description
@@ -1096,8 +1130,9 @@ impl Cpu {
     #[inline]
     pub(super) fn pla(&mut self) {
         let _ = self.read(Self::SP_BASE | u16::from(self.sp), Access::Read); // Cycle 3
-        self.acc = self.pop();
+        self.set_acc(self.pop());
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
 
     /// System opcodes
@@ -1130,13 +1165,13 @@ impl Cpu {
             self.push(status);
             self.status.set(Status::I, true);
 
-            self.pc = self.read_u16(Self::NMI_VECTOR);
+            self.set_pc(self.read_u16(Self::NMI_VECTOR));
             log::trace!("NMI: {}", self.cycle);
         } else {
             self.push(status);
             self.status.set(Status::I, true);
 
-            self.pc = self.read_u16(Self::IRQ_VECTOR);
+            self.set_pc(self.read_u16(Self::IRQ_VECTOR));
             log::trace!("IRQ: {}", self.cycle);
         }
         // Prevent NMI from triggering immediately after BRK
@@ -1189,13 +1224,14 @@ impl Cpu {
         let a = self.acc;
         let (x1, o1) = a.overflowing_sub(val);
         let (x2, o2) = x1.overflowing_sub(1 - self.status_bit(Status::C));
-        self.acc = x2;
+        self.set_acc(x2);
         self.status.set(Status::C, !(o1 | o2));
         self.status.set(
             Status::V,
             (a ^ val) & 0x80 != 0 && (a ^ self.acc) & 0x80 != 0,
         );
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
         self.write_fetched(val);
     }
     /// DCP: Shortcut for DEC then CMP
@@ -1215,9 +1251,9 @@ impl Cpu {
         self.fetch_data();
         let t = u32::from(self.acc & self.x).wrapping_sub(u32::from(self.fetched_data));
         self.set_zn_status((t & 0xFF) as u8);
-        self.status
-            .set(Status::C, (((t >> 8) & 0x01) ^ 0x01) == 0x01);
-        self.x = (t & 0xFF) as u8;
+        self.status.set(Status::C, (((t >> 8) & 0x01) ^ 0x01) == 0x01);
+        self.set_status(self.status);
+        self.set_x((t & 0xFF) as u8);
     }
     /// LAS: Shortcut for LDA then TSX
     #[inline]
@@ -1261,6 +1297,7 @@ impl Cpu {
         // AND
         self.acc &= self.fetched_data;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// SXA/SHX/XAS: AND X with the high byte of the target address + 1
     #[inline]
@@ -1297,13 +1334,14 @@ impl Cpu {
         let a = self.acc;
         let (x1, o1) = ret.overflowing_add(a);
         let (x2, o2) = x1.overflowing_add(self.status_bit(Status::C));
-        self.acc = x2;
+        self.set_acc(x2);
         self.status.set(Status::C, o1 | o2);
         self.status.set(
             Status::V,
             (a ^ ret) & 0x80 == 0 && (a ^ self.acc) & 0x80 != 0,
         );
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
         self.write_fetched(ret);
     }
     /// TAS: Shortcut for STA then TXS
@@ -1312,7 +1350,7 @@ impl Cpu {
         // STA
         self.write(self.abs_addr, self.acc, Access::Write);
         // TXS
-        self.sp = self.x;
+        self.set_sp(self.x);
     }
     /// ARR: Shortcut for AND #imm then ROR, but sets flags differently
     /// C is bit 6 and V is bit 6 xor bit 5
@@ -1329,6 +1367,7 @@ impl Cpu {
         self.acc |= self.status_bit(Status::C) << 7;
         self.status.set(Status::C, t & 0x01 == 0x01);
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// SRA: Shortcut for LSR then EOR
     #[inline]
@@ -1341,6 +1380,7 @@ impl Cpu {
         // EOR
         self.acc ^= val;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
         self.write_fetched(val);
     }
     /// ALR/ASR: Shortcut for AND #imm then LSR
@@ -1353,6 +1393,7 @@ impl Cpu {
         self.status.set(Status::C, self.acc & 0x01 == 0x01);
         self.acc >>= 1;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
     /// RLA: Shortcut for ROL then AND
     #[inline]
@@ -1366,6 +1407,7 @@ impl Cpu {
         // AND
         self.acc &= val;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
         self.write_fetched(val);
     }
     /// ANC/AAC: AND #imm but puts bit 7 into carry as if ASL was executed
@@ -1377,6 +1419,7 @@ impl Cpu {
         self.set_zn_status(self.acc);
         // Put bit 7 into carry
         self.status.set(Status::C, (self.acc >> 7) & 1 > 0);
+        self.set_status(self.status);
     }
     /// SLO: Shortcut for ASL then ORA
     #[inline]
@@ -1390,6 +1433,7 @@ impl Cpu {
         // ORA
         self.acc |= val;
         self.set_zn_status(self.acc);
+        self.set_status(self.status);
     }
 }
 
