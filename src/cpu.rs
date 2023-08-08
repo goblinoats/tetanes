@@ -211,12 +211,6 @@ impl Cpu {
 
     #[inline]
     #[must_use]
-    pub const fn acc(&self) -> u8 {
-        self.acc
-    }
-
-    #[inline]
-    #[must_use]
     pub const fn a(&self) -> u8 {
         self.acc
     }
@@ -438,14 +432,14 @@ impl Cpu {
     pub fn irq(&mut self) {
         self.read(self.pc, Access::Dummy);
         self.read(self.pc, Access::Dummy);
-        self.push_u16(self.pc);
+        self.push_u16(self.pc());
 
         // Pushing status to the stack has to happen after checking NMI since it can hijack the BRK
         // IRQ when it occurs between cycles 4 and 5.
         // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
         //
         // Set U and !B during push
-        let status = ((self.status | Status::U) & !Status::B).bits();
+        let status = ((self.status()| Status::U) & !Status::B).bits();
 
         if self.nmi {
             self.nmi = false;
@@ -489,7 +483,7 @@ impl Cpu {
         // The IRQ status at the end of the second-to-last cycle is what matters,
         // so keep the second-to-last status.
         self.prev_run_irq = self.run_irq;
-        self.run_irq = !self.irq.is_empty() && !self.status.intersects(Status::I);
+        self.run_irq = !self.irq.is_empty() && !self.status().intersects(Status::I);
         if self.run_irq {
             log::trace!("IRQ Level Detected: {}: {:?}", self.cycle, self.irq);
         }
@@ -605,7 +599,7 @@ impl Cpu {
     fn set_zn_status(&mut self, val: u8) {
         self.status.set(Status::Z, val == 0x00);
         self.status.set(Status::N, val & 0x80 == 0x80);
-        self.set_status(self.status);
+        // self.set_status(self.status);
     }
 
     #[inline]
@@ -618,16 +612,16 @@ impl Cpu {
     // Push a byte to the stack
     #[inline]
     fn push(&mut self, val: u8) {
-        self.write(Self::SP_BASE | u16::from(self.sp), val, Access::Write);
-        self.sp = self.sp.wrapping_sub(1);
+        self.write(Self::SP_BASE | u16::from(self.sp()), val, Access::Write);
+        self.set_sp(self.sp().wrapping_sub(1));
     }
 
     // Pull a byte from the stack
     #[must_use]
     #[inline]
     fn pop(&mut self) -> u8 {
-        self.sp = self.sp.wrapping_add(1);
-        self.read(Self::SP_BASE | u16::from(self.sp), Access::Read)
+        self.set_sp(self.sp().wrapping_add(1));
+        self.read(Self::SP_BASE | u16::from(self.sp()), Access::Read)
     }
 
     // Peek byte at the top of the stack
@@ -675,15 +669,15 @@ impl Cpu {
     fn fetch_data(&mut self) {
         let mode = self.instr.addr_mode();
         self.fetched_data = match mode {
-            IMP | ACC => self.acc,
+            IMP | ACC => self.a(),
             ABX | ABY | IDY => {
                 // Read instructions may have crossed a page boundary and need to be re-read
                 match self.instr.op() {
                     LDA | LDX | LDY | EOR | AND | ORA | ADC | SBC | CMP | BIT | LAX | NOP | IGN
                     | LAS => {
                         let reg = match mode {
-                            ABX => self.x,
-                            ABY | IDY => self.y,
+                            ABX => self.x(),
+                            ABY | IDY => self.y(),
                             _ => unreachable!("not possible"),
                         };
                         // Read if we crossed, otherwise use what was already set in cycle 4 from
@@ -719,7 +713,7 @@ impl Cpu {
     #[must_use]
     #[inline]
     fn read_instr(&mut self) -> u8 {
-        let val = self.read(self.pc, Access::Read);
+        let val = self.read(self.pc(), Access::Read);
         self.set_pc(self.pc.wrapping_add(1));
         val
     }
@@ -1123,7 +1117,7 @@ impl Reset for Cpu {
                 self.set_sp(self.sp.wrapping_sub(0x03));
             }
             Kind::Hard => {
-                self.set_a(0x00);
+                self.set_acc(0x00);
                 self.set_x(0x00);
                 self.set_y(0x00);
                 self.set_status(Self::POWER_ON_STATUS);
